@@ -1,7 +1,7 @@
 from datetime import datetime
 from telegram import Bot
-from config import BOT_TOKEN, DB_GROUP_ID
-from utils import parse_user_message, format_user_message
+from backend.config import BOT_TOKEN, DB_GROUP_ID
+from backend.utils import parse_user_message, format_user_message
 
 bot = Bot(token=BOT_TOKEN)
 
