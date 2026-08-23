@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from backend.models import SignupRequest, LoginRequest, WithdrawRequest
@@ -178,9 +178,12 @@ def start_bot():
     try:
         bot_app = Application.builder().token(config.BOT_TOKEN).build()
         setup_handlers(bot_app)
-        bot_app.run_polling()
+        # Delete any existing webhook to ensure polling works
+        loop.run_until_complete(bot_app.bot.delete_webhook(drop_pending_updates=True))
+        print("Webhook cleared. Starting polling...")
+        bot_app.run_polling(drop_pending_updates=True)
     except Exception as e:
-        print(f"Bot thread error (non-critical): {e}")
+        print(f"Bot thread error: {e}")
         while True:
             import time
             time.sleep(60)
