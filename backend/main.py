@@ -8,8 +8,11 @@ from backend.config import FRONTEND_URL, ADMIN_ID, BOT_TOKEN
 import uvicorn
 from datetime import datetime
 from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 import backend.config as config
+
+# Conversation states
+BAN_ID, UNBAN_ID, BALANCE_ID, BALANCE_AMOUNT, RESET_ID, RESET_PASS = range(6)
 
 app = FastAPI()
 
@@ -34,12 +37,118 @@ async def global_exception_handler(request, exc):
 async def root():
     return {"status": "alive", "message": "Sunshine backend running"}
 
-# --- Bot command handlers (private chat only) ---
+# --- Helper check for admin ---
+def is_admin(update: Update) -> bool:
+    return update.effective_user.id == ADMIN_ID
+
+# --- Conversation Handlers ---
+
+# 1. BAN
+async def ban_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await update.message.reply_text("⛔ Unauthorized.")
+        return ConversationHandler.END
+    await update.message.reply_text("👤 Send me the User ID to ban.")
+    return BAN_ID
+
+async def ban_get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.text.strip()
+    user = await get_user_by_id(user_id)
+    if not user:
+        await update.message.reply_text("❌ User not found.")
+        return ConversationHandler.END
+    await update_user(user_id, {'status': 'Banned'})
+    await update.message.reply_text(f"✅ User {user_id} banned successfully.")
+    return ConversationHandler.END
+
+# 2. UNBAN
+async def unban_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await update.message.reply_text("⛔ Unauthorized.")
+        return ConversationHandler.END
+    await update.message.reply_text("👤 Send me the User ID to unban.")
+    return UNBAN_ID
+
+async def unban_get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.text.strip()
+    user = await get_user_by_id(user_id)
+    if not user:
+        await update.message.reply_text("❌ User not found.")
+        return ConversationHandler.END
+    await update_user(user_id, {'status': 'Active'})
+    await update.message.reply_text(f"✅ User {user_id} unbanned successfully.")
+    return ConversationHandler.END
+
+# 3. ADD BALANCE
+async def balance_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await update.message.reply_text("⛔ Unauthorized.")
+        return ConversationHandler.END
+    await update.message.reply_text("👤 Send me the User ID to add balance.")
+    return BALANCE_ID
+
+async def balance_get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.text.strip()
+    user = await get_user_by_id(user_id)
+    if not user:
+        await update.message.reply_text("❌ User not found.")
+        return ConversationHandler.END
+    context.user_data['target_id'] = user_id
+    await update.message.reply_text("💰 Send me the amount (in ₹) to add.")
+    return BALANCE_AMOUNT
+
+async def balance_get_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        amount = int(update.message.text.strip())
+        user_id = context.user_data.get('target_id')
+        user = await get_user_by_id(user_id)
+        if not user:
+            await update.message.reply_text("❌ User not found.")
+            return ConversationHandler.END
+        new_balance = int(user.get('balance', 0)) + amount
+        await update_user(user_id, {'balance': new_balance})
+        await update.message.reply_text(f"✅ Added ₹{amount} to user {user_id}. New balance: ₹{new_balance}.")
+    except ValueError:
+        await update.message.reply_text("❌ Please send a valid number.")
+        return BALANCE_AMOUNT
+    return ConversationHandler.END
+
+# 4. RESET PASSWORD
+async def reset_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await update.message.reply_text("⛔ Unauthorized.")
+        return ConversationHandler.END
+    await update.message.reply_text("👤 Send me the User ID to reset password.")
+    return RESET_ID
+
+async def reset_get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.text.strip()
+    user = await get_user_by_id(user_id)
+    if not user:
+        await update.message.reply_text("❌ User not found.")
+        return ConversationHandler.END
+    context.user_data['reset_id'] = user_id
+    await update.message.reply_text("🔑 Send me the new password.")
+    return RESET_PASS
+
+async def reset_get_pass(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    new_pass = update.message.text.strip()
+    user_id = context.user_data.get('reset_id')
+    await update_user(user_id, {'password': new_pass})
+    await update.message.reply_text(f"✅ Password reset for user {user_id}.")
+    return ConversationHandler.END
+
+# 5. CANCEL
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ Operation cancelled.")
+    return ConversationHandler.END
+
+# 6. START & HELP
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
     await update.message.reply_text(
-        "Sunshine Admin Bot.\n"
+        "🤖 Sunshine Admin Bot\n"
         "Send /help to see all commands."
     )
 
@@ -47,69 +156,16 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
         return
     help_text = (
-        "📋 *Available Commands:*\n\n"
-        "/start - Check if bot is alive\n"
-        "/help - Show this help message\n\n"
-        "/add_balance <USER_ID> <AMOUNT> - Add money to user balance\n"
-        "/ban <USER_ID> - Ban a user\n"
-        "/unban <USER_ID> - Unban a user\n"
-        "/reset_password <USER_ID> <NEW_PASS> - Reset user password\n"
+        "📋 *Available Interactive Commands:*\n\n"
+        "/ban - Ban a user (bot will ask for ID)\n"
+        "/unban - Unban a user (bot will ask for ID)\n"
+        "/add_balance - Add money to a user (bot will ask for ID and amount)\n"
+        "/reset_password - Reset user password (bot will ask for ID and new pass)\n"
         "/list_all - List all registered users\n"
+        "/cancel - Cancel any ongoing operation\n"
+        "/help - Show this message"
     )
     await update.message.reply_text(help_text, parse_mode="Markdown")
-
-async def add_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
-        return
-    args = context.args
-    if len(args) < 2:
-        await update.message.reply_text("Usage: /add_balance <USER_ID> <AMOUNT>")
-        return
-    user_id, amount = args[0], int(args[1])
-    from backend.database import get_user_by_id, update_user
-    user = await get_user_by_id(user_id)
-    if not user:
-        await update.message.reply_text("User not found.")
-        return
-    new_balance = int(user.get('balance', 0)) + amount
-    await update_user(user_id, {'balance': new_balance})
-    await update.message.reply_text(f"Balance updated. User {user_id} now has ₹{new_balance}.")
-
-async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
-        return
-    args = context.args
-    if not args:
-        await update.message.reply_text("Usage: /ban <USER_ID>")
-        return
-    user_id = args[0]
-    from backend.database import update_user
-    await update_user(user_id, {'status': 'Banned'})
-    await update.message.reply_text(f"User {user_id} banned.")
-
-async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
-        return
-    args = context.args
-    if not args:
-        await update.message.reply_text("Usage: /unban <USER_ID>")
-        return
-    user_id = args[0]
-    from backend.database import update_user
-    await update_user(user_id, {'status': 'Active'})
-    await update.message.reply_text(f"User {user_id} unbanned.")
-
-async def reset_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
-        return
-    args = context.args
-    if len(args) < 2:
-        await update.message.reply_text("Usage: /reset_password <USER_ID> <NEW_PASS>")
-        return
-    user_id, new_pass = args[0], args[1]
-    from backend.database import update_user
-    await update_user(user_id, {'password': new_pass})
-    await update.message.reply_text(f"Password reset for {user_id}.")
 
 async def list_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
@@ -118,7 +174,7 @@ async def list_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = _load_users()
     if users:
         user_list = "\n".join([f"{uid}: {u.get('username')}" for uid, u in users.items()])
-        await update.message.reply_text(f"Users:\n{user_list}")
+        await update.message.reply_text(f"📋 Users:\n{user_list}")
     else:
         await update.message.reply_text("No users found.")
 
@@ -134,7 +190,7 @@ async def webhook(request: Request):
         print(f"Webhook error: {e}")
         return JSONResponse(status_code=200, content={"status": "error"})
 
-# --- API Routes (all notifications go to ADMIN_ID) ---
+# --- API Routes ---
 @app.post("/signup")
 async def signup(data: SignupRequest):
     try:
@@ -213,6 +269,8 @@ async def solve_captcha(request: dict):
         user = await check_and_reset_streak(user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+        if user.get('status') == 'Banned':
+            raise HTTPException(status_code=403, detail="Account banned")
         daily_count = int(user.get('daily_captcha_count', 0))
         days = int(user.get('days', 0))
         balance = int(user.get('balance', 0))
@@ -252,6 +310,8 @@ async def withdraw(data: WithdrawRequest):
         user = await get_user_by_id(data.user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+        if user.get('status') == 'Banned':
+            raise HTTPException(status_code=403, detail="Account banned")
         days = int(user.get('days', 0))
         if days < 21:
             raise HTTPException(status_code=400, detail="Withdrawals only after 21 days")
@@ -273,13 +333,43 @@ async def withdraw(data: WithdrawRequest):
 @app.on_event("startup")
 async def startup():
     bot_app = Application.builder().token(config.BOT_TOKEN).build()
+
+    # Conversation handlers
+    conv_ban = ConversationHandler(
+        entry_points=[CommandHandler("ban", ban_start)],
+        states={BAN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ban_get_id)]},
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
+    conv_unban = ConversationHandler(
+        entry_points=[CommandHandler("unban", unban_start)],
+        states={UNBAN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, unban_get_id)]},
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
+    conv_balance = ConversationHandler(
+        entry_points=[CommandHandler("add_balance", balance_start)],
+        states={
+            BALANCE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, balance_get_id)],
+            BALANCE_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, balance_get_amount)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
+    conv_reset = ConversationHandler(
+        entry_points=[CommandHandler("reset_password", reset_start)],
+        states={
+            RESET_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, reset_get_id)],
+            RESET_PASS: [MessageHandler(filters.TEXT & ~filters.COMMAND, reset_get_pass)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
+
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("help", help_command))
-    bot_app.add_handler(CommandHandler("add_balance", add_balance))
-    bot_app.add_handler(CommandHandler("ban", ban_user))
-    bot_app.add_handler(CommandHandler("unban", unban_user))
-    bot_app.add_handler(CommandHandler("reset_password", reset_password))
+    bot_app.add_handler(conv_ban)
+    bot_app.add_handler(conv_unban)
+    bot_app.add_handler(conv_balance)
+    bot_app.add_handler(conv_reset)
     bot_app.add_handler(CommandHandler("list_all", list_all))
+
     app.state.bot_app = bot_app
     await bot_app.initialize()
     await bot_app.start()
