@@ -1,15 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from models import SignupRequest, LoginRequest, WithdrawRequest
-from database import create_user, get_user_by_username, get_user_by_id, update_user, check_and_reset_streak
-from utils import generate_user_id
-from config import FRONTEND_URL, DB_GROUP_ID
+from backend.models import SignupRequest, LoginRequest, WithdrawRequest
+from backend.database import create_user, get_user_by_username, get_user_by_id, update_user, check_and_reset_streak
+from backend.utils import generate_user_id
+from backend.config import FRONTEND_URL, DB_GROUP_ID
 import uvicorn
 import asyncio
 from datetime import datetime
 from telegram.ext import Application
-from bot import setup_handlers
-import config
+from backend.bot import setup_handlers
+import backend.config as config
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=[FRONTEND_URL, "https://sunshine-work-from-home.site.je"])
