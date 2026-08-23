@@ -163,7 +163,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/reset_password - Reset user password (bot will ask for ID and new pass)\n"
         "/list_all - List all registered users\n"
         "/cancel - Cancel any ongoing operation\n"
-        "/help - Show this message"
+        "/help - Show this message\n"
+        "/start - Check if bot is alive"
     )
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
@@ -344,6 +345,7 @@ async def withdraw(data: WithdrawRequest):
 async def startup():
     bot_app = Application.builder().token(config.BOT_TOKEN).build()
 
+    # Conversation handlers
     conv_ban = ConversationHandler(
         entry_points=[CommandHandler("ban", ban_start)],
         states={BAN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ban_get_id)]},
