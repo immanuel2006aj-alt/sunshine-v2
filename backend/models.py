@@ -1,10 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 class SignupRequest(BaseModel):
     username: str
     password: str
     upi: str
-    usdt: str
+    email: EmailStr          # mandatory
+    usdt: str = ""           # optional, default empty
 
 class LoginRequest(BaseModel):
     username: str
