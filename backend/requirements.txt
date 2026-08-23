@@ -1,6 +1,5 @@
 fastapi
 uvicorn
 python-telegram-bot==20.0
-pydantic
+pydantic[email]
 python-dotenv
-email-validator
