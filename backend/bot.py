@@ -3,6 +3,9 @@ from telegram.ext import CommandHandler, ContextTypes
 from backend.config import ADMIN_ID, GROUP_ID
 from backend.database import get_user_by_id, update_user
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Bot is alive! Ready to handle commands.")
+
 async def add_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("Unauthorized.")
@@ -70,6 +73,7 @@ async def list_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No users found.")
 
 def setup_handlers(app):
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("add_balance", add_balance))
     app.add_handler(CommandHandler("ban", ban_user))
     app.add_handler(CommandHandler("unban", unban_user))
