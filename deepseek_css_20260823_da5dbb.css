@@ -1,0 +1,5 @@
+body { font-family: 'Inter', sans-serif; background: #F8FAFC; }
+.btn-primary { background: #1E3A8A; transition: all 0.2s; }
+.btn-primary:hover { background: #15307a; transform: translateY(-1px); box-shadow: 0 8px 20px rgba(30,58,138,0.25); }
+.btn-secondary { background: #0D9488; transition: all 0.2s; }
+.btn-secondary:hover { background: #0b7a6f; transform: translateY(-1px); box-shadow: 0 8px 20px rgba(13,148,136,0.25); }
