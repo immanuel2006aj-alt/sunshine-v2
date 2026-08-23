@@ -147,6 +147,7 @@ async def signup(data: SignupRequest):
             'username': data.username,
             'password': data.password,
             'upi': data.upi,
+            'email': data.email,
             'usdt': data.usdt,
             'balance': 0,
             'days': 0,
