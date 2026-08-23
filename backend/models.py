@@ -4,8 +4,8 @@ class SignupRequest(BaseModel):
     username: str
     password: str
     upi: str
-    email: EmailStr          # mandatory
-    usdt: str = ""           # optional, default empty
+    email: EmailStr
+    usdt: str = ""
 
 class LoginRequest(BaseModel):
     username: str
