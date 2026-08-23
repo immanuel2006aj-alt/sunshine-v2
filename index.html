@@ -9,49 +9,82 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Navigation -->
   <nav class="fixed top-0 w-full bg-white/80 backdrop-blur-md border-b border-gray-200/50 z-50">
-    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+    <div class="container flex justify-between items-center py-4">
       <span class="text-2xl font-bold text-[#1E3A8A]">Sunshine</span>
-      <div>
-        <a href="#login" class="text-slate-600 hover:text-[#1E3A8A] mr-6">Login</a>
-        <a href="#signup" class="btn-primary text-white px-6 py-2 rounded-full text-sm font-medium">Sign Up</a>
-      </div>
+      <button id="toggleAuthBtn" class="text-sm text-[#0D9488] font-medium hover:underline">
+        Login
+      </button>
     </div>
   </nav>
-  <section class="pt-32 pb-20 px-6 max-w-7xl mx-auto text-center">
-    <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-[#1E3A8A] leading-tight">
-      Earn ₹5,500 <span class="text-[#0D9488]">From Home</span>
-    </h1>
-    <p class="text-slate-600 text-lg mt-4 max-w-2xl mx-auto">
-      Solve captchas daily, track your 21‑day progress, and withdraw via UPI or USDT.
-    </p>
-    <div class="mt-8 flex flex-wrap justify-center gap-4">
-      <a href="#signup" class="btn-primary text-white px-8 py-3 rounded-full text-lg shadow-lg">Get Started</a>
+
+  <!-- Hero -->
+  <section class="pt-32 pb-12 text-center">
+    <div class="container">
+      <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-[#1E3A8A] leading-tight">
+        Earn ₹5,500 <span class="text-[#0D9488]">From Home</span>
+      </h1>
+      <p class="text-slate-600 text-lg max-w-2xl mx-auto mt-4">
+        Solve captchas daily, track your 21‑day progress, and withdraw via UPI or USDT.
+      </p>
     </div>
   </section>
-  <section id="signup" class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-8 mb-12">
-    <h2 class="text-2xl font-bold text-[#1E3A8A] mb-6">Create Account</h2>
-    <form id="signupForm">
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-slate-700">Username</label>
-        <input type="text" id="signupUsername" class="w-full border border-slate-300 rounded-lg px-4 py-2" required>
-      </div>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-slate-700">Password</label>
-        <input type="password" id="signupPassword" class="w-full border border-slate-300 rounded-lg px-4 py-2" required>
-      </div>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-slate-700">UPI ID</label>
-        <input type="text" id="signupUpi" class="w-full border border-slate-300 rounded-lg px-4 py-2" required>
-      </div>
-      <div class="mb-6">
-        <label class="block text-sm font-medium text-slate-700">USDT Address</label>
-        <input type="text" id="signupUsdt" class="w-full border border-slate-300 rounded-lg px-4 py-2" required>
-      </div>
-      <button type="submit" class="w-full btn-primary text-white py-3 rounded-lg text-lg font-medium">Sign Up</button>
-    </form>
-    <p class="mt-4 text-center text-sm text-slate-500">Already have an account? <a href="#login" class="text-[#0D9488] font-medium">Login</a></p>
+
+  <!-- Signup Form -->
+  <section id="signupSection" class="container max-w-md mx-auto mb-12">
+    <div class="card">
+      <h2 class="text-2xl font-bold text-[#1E3A8A] mb-6">Create Account</h2>
+      <form id="signupForm">
+        <div class="mb-4">
+          <label class="label">Username *</label>
+          <input type="text" id="signupUsername" class="input-field" required>
+        </div>
+        <div class="mb-4">
+          <label class="label">Password *</label>
+          <input type="password" id="signupPassword" class="input-field" required>
+        </div>
+        <div class="mb-4">
+          <label class="label">UPI ID *</label>
+          <input type="text" id="signupUpi" class="input-field" required>
+        </div>
+        <div class="mb-4">
+          <label class="label">Email *</label>
+          <input type="email" id="signupEmail" class="input-field" required>
+        </div>
+        <div class="mb-6">
+          <label class="label">USDT Address (optional)</label>
+          <input type="text" id="signupUsdt" class="input-field">
+        </div>
+        <button type="submit" class="btn-primary w-full">Sign Up</button>
+      </form>
+      <p class="text-center text-sm text-slate-500 mt-4">
+        Already have an account? <span id="switchToLogin" class="text-[#0D9488] font-medium cursor-pointer">Login</span>
+      </p>
+    </div>
   </section>
+
+  <!-- Login Form (hidden by default) -->
+  <section id="loginSection" class="container max-w-md mx-auto mb-12 hidden">
+    <div class="card">
+      <h2 class="text-2xl font-bold text-[#1E3A8A] mb-6">Login</h2>
+      <form id="loginForm">
+        <div class="mb-4">
+          <label class="label">Username</label>
+          <input type="text" id="loginUsername" class="input-field" required>
+        </div>
+        <div class="mb-6">
+          <label class="label">Password</label>
+          <input type="password" id="loginPassword" class="input-field" required>
+        </div>
+        <button type="submit" class="btn-primary w-full">Login</button>
+      </form>
+      <p class="text-center text-sm text-slate-500 mt-4">
+        Don't have an account? <span id="switchToSignup" class="text-[#0D9488] font-medium cursor-pointer">Sign Up</span>
+      </p>
+    </div>
+  </section>
+
   <script src="app.js"></script>
 </body>
 </html>
