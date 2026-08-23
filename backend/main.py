@@ -11,12 +11,10 @@ from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 import backend.config as config
 
-# Conversation states
 BAN_ID, UNBAN_ID, BALANCE_ID, BALANCE_AMOUNT, RESET_ID, RESET_PASS = range(6)
 
 app = FastAPI()
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,13 +35,10 @@ async def global_exception_handler(request, exc):
 async def root():
     return {"status": "alive", "message": "Sunshine backend running"}
 
-# --- Helper check for admin ---
 def is_admin(update: Update) -> bool:
     return update.effective_user.id == ADMIN_ID
 
-# --- Conversation Handlers ---
-
-# 1. BAN
+# --- Conversation handlers ---
 async def ban_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update):
         await update.message.reply_text("⛔ Unauthorized.")
@@ -61,7 +56,6 @@ async def ban_get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ User {user_id} banned successfully.")
     return ConversationHandler.END
 
-# 2. UNBAN
 async def unban_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update):
         await update.message.reply_text("⛔ Unauthorized.")
@@ -79,7 +73,6 @@ async def unban_get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ User {user_id} unbanned successfully.")
     return ConversationHandler.END
 
-# 3. ADD BALANCE
 async def balance_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update):
         await update.message.reply_text("⛔ Unauthorized.")
@@ -113,7 +106,6 @@ async def balance_get_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return BALANCE_AMOUNT
     return ConversationHandler.END
 
-# 4. RESET PASSWORD
 async def reset_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update):
         await update.message.reply_text("⛔ Unauthorized.")
@@ -138,19 +130,15 @@ async def reset_get_pass(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ Password reset for user {user_id}.")
     return ConversationHandler.END
 
-# 5. CANCEL
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Operation cancelled.")
     return ConversationHandler.END
 
-# 6. START & HELP
+# --- Start & Help ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
-    await update.message.reply_text(
-        "🤖 Sunshine Admin Bot\n"
-        "Send /help to see all commands."
-    )
+    await update.message.reply_text("🤖 Sunshine Admin Bot. Send /help to see commands.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
@@ -179,7 +167,7 @@ async def list_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("No users found.")
 
-# --- Webhook endpoint ---
+# --- Webhook ---
 @app.post("/webhook")
 async def webhook(request: Request):
     try:
@@ -191,7 +179,7 @@ async def webhook(request: Request):
         print(f"Webhook error: {e}")
         return JSONResponse(status_code=200, content={"status": "error"})
 
-# --- API Routes ---
+# --- API routes ---
 @app.post("/signup")
 async def signup(data: SignupRequest):
     try:
@@ -220,132 +208,97 @@ async def signup(data: SignupRequest):
         except:
             pass
         return {"user_id": user_id}
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"Signup error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/login")
 async def login(data: LoginRequest):
-    try:
-        user = await get_user_by_username(data.username)
-        if not user or user.get('password') != data.password:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        if user.get('status') == 'Banned':
-            raise HTTPException(status_code=403, detail="Account banned")
-        return {"user_id": user['id'], "status": user['status']}
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Login error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    user = await get_user_by_username(data.username)
+    if not user or user.get('password') != data.password:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if user.get('status') == 'Banned':
+        raise HTTPException(status_code=403, detail="Account banned")
+    return {"user_id": user['id'], "status": user['status']}
 
 @app.get("/dashboard/{user_id}")
 async def dashboard(user_id: str):
-    try:
-        user = await check_and_reset_streak(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        return {
-            "user_id": user.get('id', user_id),
-            "username": user.get('username', 'Unknown'),
-            "balance": int(user.get('balance', 0)),
-            "status": user.get('status', 'Active'),
-            "days": int(user.get('days', 0)),
-            "daily_captcha_count": int(user.get('daily_captcha_count', 0))
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Dashboard error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    user = await check_and_reset_streak(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "user_id": user.get('id', user_id),
+        "username": user.get('username', 'Unknown'),
+        "balance": int(user.get('balance', 0)),
+        "status": user.get('status', 'Active'),
+        "days": int(user.get('days', 0)),
+        "daily_captcha_count": int(user.get('daily_captcha_count', 0))
+    }
 
 @app.post("/solve_captcha")
 async def solve_captcha(request: dict):
-    try:
-        user_id = request.get('user_id')
-        typed = request.get('typed_code', '').strip().upper()
-        expected = request.get('captcha_code', '').strip().upper()
-
-        if not user_id or not typed or not expected:
-            raise HTTPException(status_code=400, detail="Missing required fields")
-        if typed != expected:
-            raise HTTPException(status_code=400, detail="Incorrect captcha code")
-
-        user = await check_and_reset_streak(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        if user.get('status') == 'Banned':
-            raise HTTPException(status_code=403, detail="Account banned")
-
-        daily_count = int(user.get('daily_captcha_count', 0))
-        days = int(user.get('days', 0))
-        balance = int(user.get('balance', 0))
-        quota = 262
-
-        daily_count += 1
-        balance += 1
-
-        if daily_count >= quota:
-            days += 1
-            daily_count = 0
-            await update_user(user_id, {
-                'daily_captcha_count': daily_count,
-                'days': days,
-                'balance': balance,
-                'last_active': datetime.now().isoformat()
-            })
-            try:
-                bot = Bot(token=config.BOT_TOKEN)
-                await bot.send_message(chat_id=ADMIN_ID, text=f"User {user_id} completed day {days}!")
-            except:
-                pass
-        else:
-            await update_user(user_id, {
-                'daily_captcha_count': daily_count,
-                'balance': balance,
-                'last_active': datetime.now().isoformat()
-            })
-
-        return {"success": True, "new_balance": balance, "daily_progress": daily_count, "days": days}
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Captcha error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    user_id = request.get('user_id')
+    typed = request.get('typed_code', '').strip().upper()
+    expected = request.get('captcha_code', '').strip().upper()
+    if not user_id or not typed or not expected:
+        raise HTTPException(status_code=400, detail="Missing fields")
+    if typed != expected:
+        raise HTTPException(status_code=400, detail="Incorrect captcha code")
+    user = await check_and_reset_streak(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get('status') == 'Banned':
+        raise HTTPException(status_code=403, detail="Account banned")
+    daily_count = int(user.get('daily_captcha_count', 0))
+    days = int(user.get('days', 0))
+    balance = int(user.get('balance', 0))
+    daily_count += 1
+    balance += 1
+    if daily_count >= 262:
+        days += 1
+        daily_count = 0
+        await update_user(user_id, {
+            'daily_captcha_count': daily_count,
+            'days': days,
+            'balance': balance,
+            'last_active': datetime.now().isoformat()
+        })
+        try:
+            bot = Bot(token=config.BOT_TOKEN)
+            await bot.send_message(chat_id=ADMIN_ID, text=f"User {user_id} completed day {days}!")
+        except:
+            pass
+    else:
+        await update_user(user_id, {
+            'daily_captcha_count': daily_count,
+            'balance': balance,
+            'last_active': datetime.now().isoformat()
+        })
+    return {"success": True, "new_balance": balance, "daily_progress": daily_count, "days": days}
 
 @app.post("/withdraw")
 async def withdraw(data: WithdrawRequest):
+    user = await get_user_by_id(data.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get('status') == 'Banned':
+        raise HTTPException(status_code=403, detail="Account banned")
+    days = int(user.get('days', 0))
+    if days < 21:
+        raise HTTPException(status_code=400, detail="Withdrawals only after 21 days")
+    notes = user.get('notes', '') + "\nWithdrawal requested."
+    await update_user(data.user_id, {'notes': notes})
     try:
-        user = await get_user_by_id(data.user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        if user.get('status') == 'Banned':
-            raise HTTPException(status_code=403, detail="Account banned")
-        days = int(user.get('days', 0))
-        if days < 21:
-            raise HTTPException(status_code=400, detail="Withdrawals only after 21 days")
-        notes = user.get('notes', '') + "\nWithdrawal requested."
-        await update_user(data.user_id, {'notes': notes})
-        try:
-            bot = Bot(token=config.BOT_TOKEN)
-            await bot.send_message(chat_id=ADMIN_ID, text=f"WITHDRAWAL: User {data.user_id} requested ₹{user.get('balance',0)}")
-        except:
-            pass
-        return {"status": "submitted"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Withdraw error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        bot = Bot(token=config.BOT_TOKEN)
+        await bot.send_message(chat_id=ADMIN_ID, text=f"WITHDRAWAL: User {data.user_id} requested ₹{user.get('balance',0)}")
+    except:
+        pass
+    return {"status": "submitted"}
 
-# --- Startup: build bot and set webhook ---
+# --- Startup ---
 @app.on_event("startup")
 async def startup():
     bot_app = Application.builder().token(config.BOT_TOKEN).build()
 
-    # Conversation handlers
     conv_ban = ConversationHandler(
         entry_points=[CommandHandler("ban", ban_start)],
         states={BAN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ban_get_id)]},
@@ -384,7 +337,7 @@ async def startup():
     app.state.bot_app = bot_app
     await bot_app.initialize()
     await bot_app.start()
-    webhook_url = f"https://sunshine-v2.onrender.com/webhook"
+    webhook_url = "https://sunshine-v2.onrender.com/webhook"
     await bot_app.bot.delete_webhook(drop_pending_updates=True)
     await bot_app.bot.set_webhook(url=webhook_url)
     print(f"Webhook set to: {webhook_url}")
