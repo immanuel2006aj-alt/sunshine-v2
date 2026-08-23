@@ -264,19 +264,28 @@ async def dashboard(user_id: str):
 async def solve_captcha(request: dict):
     try:
         user_id = request.get('user_id')
-        if not user_id:
-            raise HTTPException(status_code=400, detail="Missing user_id")
+        typed = request.get('typed_code', '').strip().upper()
+        expected = request.get('captcha_code', '').strip().upper()
+
+        if not user_id or not typed or not expected:
+            raise HTTPException(status_code=400, detail="Missing required fields")
+        if typed != expected:
+            raise HTTPException(status_code=400, detail="Incorrect captcha code")
+
         user = await check_and_reset_streak(user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         if user.get('status') == 'Banned':
             raise HTTPException(status_code=403, detail="Account banned")
+
         daily_count = int(user.get('daily_captcha_count', 0))
         days = int(user.get('days', 0))
         balance = int(user.get('balance', 0))
         quota = 262
+
         daily_count += 1
         balance += 1
+
         if daily_count >= quota:
             days += 1
             daily_count = 0
@@ -297,6 +306,7 @@ async def solve_captcha(request: dict):
                 'balance': balance,
                 'last_active': datetime.now().isoformat()
             })
+
         return {"success": True, "new_balance": balance, "daily_progress": daily_count, "days": days}
     except HTTPException:
         raise
@@ -334,7 +344,6 @@ async def withdraw(data: WithdrawRequest):
 async def startup():
     bot_app = Application.builder().token(config.BOT_TOKEN).build()
 
-    # Conversation handlers
     conv_ban = ConversationHandler(
         entry_points=[CommandHandler("ban", ban_start)],
         states={BAN_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ban_get_id)]},
