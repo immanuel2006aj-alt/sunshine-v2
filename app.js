@@ -1,29 +1,57 @@
-// HARDCODED – API_BASE points to your live Render backend
+// API base
 const API_BASE = "https://sunshine-v2.onrender.com";
 const SUPPORT_USERNAME = "Imgraceladie";
-const GROUP_INVITE = "https://t.me/+Xz1vJc0kzKs1M2Nl";
-const FRONTEND_URL = "https://sunshine-work-from-home.site.je";
 
 function getUserId() { return localStorage.getItem('userId'); }
 
-// Signup
+// ---- Toggle between Signup and Login ----
+const signupSection = document.getElementById('signupSection');
+const loginSection = document.getElementById('loginSection');
+const switchToLogin = document.getElementById('switchToLogin');
+const switchToSignup = document.getElementById('switchToSignup');
+const toggleAuthBtn = document.getElementById('toggleAuthBtn');
+
+function showSignup() {
+  signupSection?.classList.remove('hidden');
+  loginSection?.classList.add('hidden');
+  if (toggleAuthBtn) toggleAuthBtn.textContent = 'Login';
+}
+function showLogin() {
+  signupSection?.classList.add('hidden');
+  loginSection?.classList.remove('hidden');
+  if (toggleAuthBtn) toggleAuthBtn.textContent = 'Sign Up';
+}
+
+switchToLogin?.addEventListener('click', showLogin);
+switchToSignup?.addEventListener('click', showSignup);
+toggleAuthBtn?.addEventListener('click', () => {
+  if (signupSection?.classList.contains('hidden')) showSignup();
+  else showLogin();
+});
+
+// ---- Signup ----
 document.getElementById('signupForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const username = document.getElementById('signupUsername').value;
+  const username = document.getElementById('signupUsername').value.trim();
   const password = document.getElementById('signupPassword').value;
-  const upi = document.getElementById('signupUpi').value;
-  const usdt = document.getElementById('signupUsdt').value;
+  const upi = document.getElementById('signupUpi').value.trim();
+  const email = document.getElementById('signupEmail').value.trim();
+  const usdt = document.getElementById('signupUsdt').value.trim() || '';
+
+  if (!username || !password || !upi || !email) {
+    alert('All fields marked * are required.');
+    return;
+  }
+
   try {
-    console.log("Sending signup request to:", `${API_BASE}/signup`);
     const res = await fetch(`${API_BASE}/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, upi, usdt })
+      body: JSON.stringify({ username, password, upi, email, usdt })
     });
     if (!res.ok) {
-      const errorText = await res.text();
-      console.error("Signup HTTP error:", res.status, errorText);
-      alert('Signup failed: ' + res.status + ' ' + errorText);
+      const err = await res.text();
+      alert('Signup failed: ' + err);
       return;
     }
     const data = await res.json();
@@ -31,15 +59,46 @@ document.getElementById('signupForm')?.addEventListener('submit', async (e) => {
       localStorage.setItem('userId', data.user_id);
       window.location.href = '/dashboard.html';
     } else {
-      alert('Signup failed: ' + (data.detail || data.error || 'unknown error'));
+      alert('Signup failed: ' + (data.detail || 'unknown error'));
     }
   } catch (err) {
-    console.error("Signup network error:", err);
     alert('Network error: ' + err.message);
   }
 });
 
-// Dashboard logic
+// ---- Login ----
+document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if (!username || !password) {
+    alert('Please enter username and password.');
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      alert('Login failed: ' + err);
+      return;
+    }
+    const data = await res.json();
+    if (data.user_id) {
+      localStorage.setItem('userId', data.user_id);
+      window.location.href = '/dashboard.html';
+    } else {
+      alert('Login failed: ' + (data.detail || 'unknown error'));
+    }
+  } catch (err) {
+    alert('Network error: ' + err.message);
+  }
+});
+
+// ---- Dashboard ----
 if (window.location.pathname.includes('dashboard.html')) {
   const userId = getUserId();
   if (!userId) { window.location.href = '/'; }
@@ -71,17 +130,15 @@ if (window.location.pathname.includes('dashboard.html')) {
       const withdrawBtn = document.getElementById('withdrawBtn');
       if (data.days >= 21) {
         withdrawBtn.disabled = false;
-        withdrawBtn.title = '';
+        withdrawBtn.classList.remove('opacity-50', 'cursor-not-allowed');
       } else {
         withdrawBtn.disabled = true;
-        withdrawBtn.title = 'Withdraw available after 21 days';
+        withdrawBtn.classList.add('opacity-50', 'cursor-not-allowed');
       }
       
       generateCaptcha();
-      document.getElementById('groupJoinLink').href = GROUP_INVITE;
       document.getElementById('contactDeepLink').href = `tg://resolve?domain=${SUPPORT_USERNAME}`;
     } catch (err) {
-      console.error("Dashboard load error:", err);
       alert('Failed to load dashboard: ' + err.message);
     }
   }
@@ -93,11 +150,11 @@ if (window.location.pathname.includes('dashboard.html')) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     document.getElementById('captchaText').textContent = code;
-    document.getElementById('captchaText').dataset.captcha = code;
     document.getElementById('captchaInput').value = '';
     document.getElementById('captchaFeedback').textContent = '';
   }
 
+  // Solve captcha
   document.getElementById('solveCaptchaBtn')?.addEventListener('click', async () => {
     const input = document.getElementById('captchaInput').value.trim();
     if (!input) {
@@ -123,7 +180,6 @@ if (window.location.pathname.includes('dashboard.html')) {
         document.getElementById('captchaFeedback').textContent = data.detail || 'Error, try again.';
       }
     } catch (err) {
-      console.error("Captcha solve error:", err);
       document.getElementById('captchaFeedback').textContent = 'Network error.';
     }
   });
@@ -132,23 +188,21 @@ if (window.location.pathname.includes('dashboard.html')) {
     if (e.key === 'Enter') document.getElementById('solveCaptchaBtn').click();
   });
 
-  // Initial load
   loadDashboard();
 
   // Copy ID
   document.getElementById('copyIdBtn')?.addEventListener('click', () => {
     const id = document.getElementById('userIdDisplay').textContent;
-    navigator.clipboard.writeText(id).then(() => {
-      alert('User ID copied!');
-    }).catch(() => {
-      const textArea = document.createElement('textarea');
-      textArea.value = id;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      alert('User ID copied!');
-    });
+    navigator.clipboard.writeText(id).then(() => alert('User ID copied!'))
+      .catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = id;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('User ID copied!');
+      });
   });
 
   // Logout
@@ -192,7 +246,6 @@ if (window.location.pathname.includes('dashboard.html')) {
         alert('Withdrawal failed: ' + (err.detail || 'unknown error'));
       }
     } catch (err) {
-      console.error("Withdraw error:", err);
       alert('Network error: ' + err.message);
     }
   });
