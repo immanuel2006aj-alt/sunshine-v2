@@ -38,7 +38,25 @@ async def root():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
-    await update.message.reply_text("Sunshine Admin Bot. Commands: /add_balance, /ban, /unban, /reset_password, /list_all")
+    await update.message.reply_text(
+        "Sunshine Admin Bot.\n"
+        "Send /help to see all commands."
+    )
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
+        return
+    help_text = (
+        "📋 *Available Commands:*\n\n"
+        "/start - Check if bot is alive\n"
+        "/help - Show this help message\n\n"
+        "/add_balance <USER_ID> <AMOUNT> - Add money to user balance\n"
+        "/ban <USER_ID> - Ban a user\n"
+        "/unban <USER_ID> - Unban a user\n"
+        "/reset_password <USER_ID> <NEW_PASS> - Reset user password\n"
+        "/list_all - List all registered users\n"
+    )
+    await update.message.reply_text(help_text, parse_mode="Markdown")
 
 async def add_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
@@ -255,6 +273,7 @@ async def withdraw(data: WithdrawRequest):
 async def startup():
     bot_app = Application.builder().token(config.BOT_TOKEN).build()
     bot_app.add_handler(CommandHandler("start", start))
+    bot_app.add_handler(CommandHandler("help", help_command))
     bot_app.add_handler(CommandHandler("add_balance", add_balance))
     bot_app.add_handler(CommandHandler("ban", ban_user))
     bot_app.add_handler(CommandHandler("unban", unban_user))
