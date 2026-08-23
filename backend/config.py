@@ -3,6 +3,6 @@ DB_GROUP_ID = -5368695618
 USER_GROUP_ID = -1003970713046
 ADMIN_ID = 1287496525
 FRONTEND_URL = "https://sunshine-work-from-home.site.je"
-API_BASE_URL = "https://sunshine-backend.onrender.com"  # CHANGE AFTER RENDER
+API_BASE_URL = "https://sunshine-v2.onrender.com"
 USER_GROUP_INVITE = "https://t.me/+Xz1vJc0kzKs1M2Nl"
 SUPPORT_USERNAME = "Imgraceladie"
