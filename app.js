@@ -1,4 +1,4 @@
-// API base
+// API base – change to your Render backend URL if needed
 const API_BASE = "https://sunshine-v2.onrender.com";
 const SUPPORT_USERNAME = "Imgraceladie";
 
@@ -115,18 +115,42 @@ if (window.location.pathname.includes('dashboard.html')) {
         throw new Error('Failed to load dashboard: ' + res.status);
       }
       const data = await res.json();
+
+      // --- BAN CHECK ---
+      if (data.status === 'Banned') {
+        document.getElementById('statusDisplay').textContent = 'Banned';
+        document.getElementById('statusDisplay').className = 'text-lg font-medium text-red-600';
+        document.getElementById('captchaInput').disabled = true;
+        document.getElementById('solveCaptchaBtn').disabled = true;
+        document.getElementById('captchaInput').placeholder = 'Account suspended';
+        document.getElementById('captchaFeedback').textContent = 'Your account has been suspended. Contact support.';
+        document.getElementById('withdrawBtn').disabled = true;
+        document.getElementById('withdrawBtn').classList.add('opacity-50', 'cursor-not-allowed');
+        document.getElementById('userIdDisplay').textContent = data.user_id;
+        document.getElementById('usernameDisplay').textContent = data.username;
+        document.getElementById('balanceDisplay').textContent = '₹' + data.balance;
+        document.getElementById('dayDisplay').textContent = data.days + ' / 21';
+        document.getElementById('withdrawBalance').textContent = '₹' + data.balance;
+        document.getElementById('dailyCountDisplay').textContent = '—';
+        document.getElementById('progressBar').style.width = '0%';
+        document.getElementById('contactDeepLink').href = `tg://resolve?domain=${SUPPORT_USERNAME}`;
+        return;
+      }
+
+      // Normal display
       document.getElementById('userIdDisplay').textContent = data.user_id;
       document.getElementById('usernameDisplay').textContent = data.username;
       document.getElementById('balanceDisplay').textContent = '₹' + data.balance;
       document.getElementById('dayDisplay').textContent = data.days + ' / 21';
       document.getElementById('statusDisplay').textContent = data.status;
+      document.getElementById('statusDisplay').className = 'text-lg font-medium text-green-600';
       document.getElementById('withdrawBalance').textContent = '₹' + data.balance;
       const dailyCount = data.daily_captcha_count || 0;
       const quota = 262;
       document.getElementById('dailyCountDisplay').textContent = dailyCount + ' / ' + quota;
       const percent = Math.min((dailyCount / quota) * 100, 100);
       document.getElementById('progressBar').style.width = percent + '%';
-      
+
       const withdrawBtn = document.getElementById('withdrawBtn');
       if (data.days >= 21) {
         withdrawBtn.disabled = false;
@@ -135,7 +159,13 @@ if (window.location.pathname.includes('dashboard.html')) {
         withdrawBtn.disabled = true;
         withdrawBtn.classList.add('opacity-50', 'cursor-not-allowed');
       }
-      
+
+      // Re-enable captcha inputs (in case previously banned)
+      document.getElementById('captchaInput').disabled = false;
+      document.getElementById('solveCaptchaBtn').disabled = false;
+      document.getElementById('captchaInput').placeholder = 'Type the code';
+      document.getElementById('captchaFeedback').textContent = '';
+
       generateCaptcha();
       document.getElementById('contactDeepLink').href = `tg://resolve?domain=${SUPPORT_USERNAME}`;
     } catch (err) {
@@ -188,6 +218,7 @@ if (window.location.pathname.includes('dashboard.html')) {
     if (e.key === 'Enter') document.getElementById('solveCaptchaBtn').click();
   });
 
+  // Initial load
   loadDashboard();
 
   // Copy ID
