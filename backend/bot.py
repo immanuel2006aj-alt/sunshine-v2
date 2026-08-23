@@ -1,8 +1,7 @@
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
-from config import ADMIN_ID, DB_GROUP_ID, USER_GROUP_ID
-from database import get_user_by_id, update_user
-
+from backend.config import ADMIN_ID, DB_GROUP_ID, USER_GROUP_ID
+from backend.database import get_user_by_id, update_user
 async def add_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("Unauthorized.")
