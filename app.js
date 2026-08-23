@@ -1,4 +1,4 @@
-// API base – change to your Render backend URL if needed
+// API base
 const API_BASE = "https://sunshine-v2.onrender.com";
 const SUPPORT_USERNAME = "Imgraceladie";
 
@@ -160,7 +160,7 @@ if (window.location.pathname.includes('dashboard.html')) {
         withdrawBtn.classList.add('opacity-50', 'cursor-not-allowed');
       }
 
-      // Re-enable captcha inputs (in case previously banned)
+      // Re-enable captcha inputs
       document.getElementById('captchaInput').disabled = false;
       document.getElementById('solveCaptchaBtn').disabled = false;
       document.getElementById('captchaInput').placeholder = 'Type the code';
@@ -184,33 +184,43 @@ if (window.location.pathname.includes('dashboard.html')) {
     document.getElementById('captchaFeedback').textContent = '';
   }
 
-  // Solve captcha
+  // Solve captcha – strict matching
   document.getElementById('solveCaptchaBtn')?.addEventListener('click', async () => {
-    const input = document.getElementById('captchaInput').value.trim();
-    if (!input) {
+    const typed = document.getElementById('captchaInput').value.trim().toUpperCase();
+    const expected = document.getElementById('captchaText').textContent.trim().toUpperCase();
+    
+    if (!typed) {
       document.getElementById('captchaFeedback').textContent = 'Please type the code.';
       return;
     }
+
     try {
       const res = await fetch(`${API_BASE}/solve_captcha`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId })
+        body: JSON.stringify({ 
+          user_id: userId, 
+          typed_code: typed, 
+          captcha_code: expected 
+        })
       });
       if (!res.ok) {
         const errText = await res.text();
-        document.getElementById('captchaFeedback').textContent = 'Error: ' + errText;
+        document.getElementById('captchaFeedback').textContent = '❌ ' + (errText || 'Error. Try again.');
+        generateCaptcha();
         return;
       }
       const data = await res.json();
       if (data.success) {
-        document.getElementById('captchaFeedback').textContent = 'Verified! +₹1 added.';
+        document.getElementById('captchaFeedback').textContent = '✅ Verified! +₹1 added.';
         setTimeout(loadDashboard, 500);
       } else {
-        document.getElementById('captchaFeedback').textContent = data.detail || 'Error, try again.';
+        document.getElementById('captchaFeedback').textContent = '❌ ' + (data.detail || 'Incorrect code. Try again.');
+        generateCaptcha();
       }
     } catch (err) {
       document.getElementById('captchaFeedback').textContent = 'Network error.';
+      generateCaptcha();
     }
   });
 
@@ -218,7 +228,6 @@ if (window.location.pathname.includes('dashboard.html')) {
     if (e.key === 'Enter') document.getElementById('solveCaptchaBtn').click();
   });
 
-  // Initial load
   loadDashboard();
 
   // Copy ID
@@ -280,4 +289,4 @@ if (window.location.pathname.includes('dashboard.html')) {
       alert('Network error: ' + err.message);
     }
   });
-}
+        }
