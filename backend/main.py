@@ -1,17 +1,14 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from backend.models import SignupRequest, LoginRequest, WithdrawRequest
 from backend.database import create_user, get_user_by_username, get_user_by_id, update_user, check_and_reset_streak
 from backend.utils import generate_user_id
-from backend.config import FRONTEND_URL, GROUP_ID, BOT_TOKEN
+from backend.config import FRONTEND_URL, ADMIN_ID, BOT_TOKEN
 import uvicorn
-import threading
-import asyncio
 from datetime import datetime
-from telegram import Bot
-from telegram.ext import Application
-from backend.bot import setup_handlers
+from telegram import Update, Bot
+from telegram.ext import Application, CommandHandler, ContextTypes
 import backend.config as config
 
 app = FastAPI()
@@ -37,7 +34,89 @@ async def global_exception_handler(request, exc):
 async def root():
     return {"status": "alive", "message": "Sunshine backend running"}
 
-# --- API Routes ---
+# --- Bot command handlers (private chat only) ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private":
+        return
+    await update.message.reply_text("Sunshine Admin Bot. Commands: /add_balance, /ban, /unban, /reset_password, /list_all")
+
+async def add_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
+        return
+    args = context.args
+    if len(args) < 2:
+        await update.message.reply_text("Usage: /add_balance <USER_ID> <AMOUNT>")
+        return
+    user_id, amount = args[0], int(args[1])
+    from backend.database import get_user_by_id, update_user
+    user = await get_user_by_id(user_id)
+    if not user:
+        await update.message.reply_text("User not found.")
+        return
+    new_balance = int(user.get('balance', 0)) + amount
+    await update_user(user_id, {'balance': new_balance})
+    await update.message.reply_text(f"Balance updated. User {user_id} now has ₹{new_balance}.")
+
+async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
+        return
+    args = context.args
+    if not args:
+        await update.message.reply_text("Usage: /ban <USER_ID>")
+        return
+    user_id = args[0]
+    from backend.database import update_user
+    await update_user(user_id, {'status': 'Banned'})
+    await update.message.reply_text(f"User {user_id} banned.")
+
+async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
+        return
+    args = context.args
+    if not args:
+        await update.message.reply_text("Usage: /unban <USER_ID>")
+        return
+    user_id = args[0]
+    from backend.database import update_user
+    await update_user(user_id, {'status': 'Active'})
+    await update.message.reply_text(f"User {user_id} unbanned.")
+
+async def reset_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
+        return
+    args = context.args
+    if len(args) < 2:
+        await update.message.reply_text("Usage: /reset_password <USER_ID> <NEW_PASS>")
+        return
+    user_id, new_pass = args[0], args[1]
+    from backend.database import update_user
+    await update_user(user_id, {'password': new_pass})
+    await update.message.reply_text(f"Password reset for {user_id}.")
+
+async def list_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private" or update.effective_user.id != ADMIN_ID:
+        return
+    from backend.database import _load_users
+    users = _load_users()
+    if users:
+        user_list = "\n".join([f"{uid}: {u.get('username')}" for uid, u in users.items()])
+        await update.message.reply_text(f"Users:\n{user_list}")
+    else:
+        await update.message.reply_text("No users found.")
+
+# --- Webhook endpoint ---
+@app.post("/webhook")
+async def webhook(request: Request):
+    try:
+        data = await request.json()
+        update = Update.de_json(data, app.state.bot_app.bot)
+        await app.state.bot_app.process_update(update)
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return JSONResponse(status_code=200, content={"status": "error"})
+
+# --- API Routes (all notifications go to ADMIN_ID) ---
 @app.post("/signup")
 async def signup(data: SignupRequest):
     try:
@@ -61,7 +140,7 @@ async def signup(data: SignupRequest):
         await create_user(user_data)
         try:
             bot = Bot(token=config.BOT_TOKEN)
-            await bot.send_message(chat_id=config.GROUP_ID, text=f"NEW USER: {user_id} ({data.username})")
+            await bot.send_message(chat_id=ADMIN_ID, text=f"NEW USER: {user_id} ({data.username})")
         except:
             pass
         return {"user_id": user_id}
@@ -132,7 +211,7 @@ async def solve_captcha(request: dict):
             })
             try:
                 bot = Bot(token=config.BOT_TOKEN)
-                await bot.send_message(chat_id=config.GROUP_ID, text=f"User {user_id} completed day {days}!")
+                await bot.send_message(chat_id=ADMIN_ID, text=f"User {user_id} completed day {days}!")
             except:
                 pass
         else:
@@ -161,7 +240,7 @@ async def withdraw(data: WithdrawRequest):
         await update_user(data.user_id, {'notes': notes})
         try:
             bot = Bot(token=config.BOT_TOKEN)
-            await bot.send_message(chat_id=config.GROUP_ID, text=f"WITHDRAWAL: User {data.user_id} requested ₹{user.get('balance',0)}")
+            await bot.send_message(chat_id=ADMIN_ID, text=f"WITHDRAWAL: User {data.user_id} requested ₹{user.get('balance',0)}")
         except:
             pass
         return {"status": "submitted"}
@@ -171,28 +250,23 @@ async def withdraw(data: WithdrawRequest):
         print(f"Withdraw error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- Bot polling in background ---
-def start_bot():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        bot_app = Application.builder().token(config.BOT_TOKEN).build()
-        setup_handlers(bot_app)
-        # Delete any existing webhook to ensure polling works
-        loop.run_until_complete(bot_app.bot.delete_webhook(drop_pending_updates=True))
-        print("Webhook cleared. Starting polling...")
-        bot_app.run_polling(drop_pending_updates=True)
-    except Exception as e:
-        print(f"Bot thread error: {e}")
-        while True:
-            import time
-            time.sleep(60)
-
+# --- Startup: build bot and set webhook ---
 @app.on_event("startup")
 async def startup():
-    thread = threading.Thread(target=start_bot, daemon=True)
-    thread.start()
-    print("Bot polling started in background.")
+    bot_app = Application.builder().token(config.BOT_TOKEN).build()
+    bot_app.add_handler(CommandHandler("start", start))
+    bot_app.add_handler(CommandHandler("add_balance", add_balance))
+    bot_app.add_handler(CommandHandler("ban", ban_user))
+    bot_app.add_handler(CommandHandler("unban", unban_user))
+    bot_app.add_handler(CommandHandler("reset_password", reset_password))
+    bot_app.add_handler(CommandHandler("list_all", list_all))
+    app.state.bot_app = bot_app
+    await bot_app.initialize()
+    await bot_app.start()
+    webhook_url = f"https://sunshine-v2.onrender.com/webhook"
+    await bot_app.bot.delete_webhook(drop_pending_updates=True)
+    await bot_app.bot.set_webhook(url=webhook_url)
+    print(f"Webhook set to: {webhook_url}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=10000)
